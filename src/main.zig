@@ -76,6 +76,8 @@ fn write_callback(
     }
 }
 
+const bog = @import("bog");
+
 const Animation = struct {
     png_data: []const u8,
     texture: *c.SDL_Texture,
@@ -302,6 +304,35 @@ const Game = struct {
 const jump_up_index = 3;
 const jump_down_index = 4;
 
+var current_gravity: i32 = 1;
+fn setGravity(val: i32) void {
+    current_gravity = val;
+}
+
+fn runBog(alloc: *std.mem.Allocator, vm: *bog.Vm) !void {
+    const source = try std.fs.cwd().readFileAlloc(alloc, "src/control.bog", 1024 * 1024);
+    defer alloc.free(source);
+
+    var module = bog.compile(alloc, source, &vm.errors) catch |e| switch (e) {
+        error.TokenizeError, error.ParseError, error.CompileError => {
+            const stream = &std.io.getStdErr().outStream().stream;
+            return vm.errors.render(source, stream);
+        },
+        else => |err| return err,
+    };
+    defer module.deinit(alloc);
+
+    // TODO this should happen in vm.exec but currently that would break repl
+    vm.ip = module.entry;
+    _ = vm.exec(module) catch |e| switch (e) {
+        error.RuntimeError => {
+            const stream = &std.io.getStdErr().outStream().stream;
+            return vm.errors.render(source, stream);
+        },
+        else => |err| return err,
+    };
+}
+
 pub fn main() anyerror!void {
     // TODO integrate graphics and sound
     //try sineWaveMain();
@@ -338,6 +369,15 @@ pub fn main() anyerror!void {
         anim.initialize(renderer);
     }
 
+    const alloc = std.heap.c_allocator;
+    var errors = bog.Errors.init(alloc);
+    defer errors.deinit();
+
+    var vm = try bog.Vm.init(alloc, .{});
+    defer vm.deinit();
+    try bog.std.registerAll(&vm.native_registry);
+    try vm.native_registry.register("clashproto.setGravity", setGravity);
+
     var game = Game.init();
     while (true) {
         var event: c.SDL_Event = undefined;
@@ -357,6 +397,10 @@ pub fn main() anyerror!void {
         const want_right = kb_state[c.SDL_SCANCODE_RIGHT] != 0;
         const want_up = kb_state[c.SDL_SCANCODE_UP] != 0;
         const moving = want_left or want_right;
+        if (kb_state[c.SDL_SCANCODE_F5] != 0) {
+            // run control.bog
+            try runBog(alloc, &vm);
+        }
         if (want_left) {
             game.player.direction = -1;
             if (game.player.vel_x > -game.player.max_spd_x) game.player.vel_x -= 2;
@@ -460,7 +504,7 @@ pub fn main() anyerror!void {
         }
 
         // gravity
-        game.player.vel_y += 1;
+        game.player.vel_y += current_gravity;
 
         if (game.player.vel_x > 0) {
             game.player.vel_x -= game.player.friction;

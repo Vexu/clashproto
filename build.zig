@@ -9,6 +9,7 @@ pub fn build(b: *Builder) void {
     const exe = b.addExecutable("clashproto", "src/main.zig");
     exe.addCSourceFile("deps/stb_image.c", &[_][]const u8{"-std=c99"});
     exe.addIncludeDir("deps");
+    exe.addPackagePath("bog", "../bog/src/bog.zig");
     exe.setBuildMode(mode);
     exe.setTarget(target);
 
@@ -31,9 +32,10 @@ pub fn build(b: *Builder) void {
     exe.linkLibC();
     exe.install();
 
-    const run_cmd = exe.run();
-    run_cmd.step.dependOn(b.getInstallStep());
+    // can't use this since child stdin is ignored
+    // const run_cmd = exe.run();
+    // run_cmd.step.dependOn(b.getInstallStep());
 
-    const run_step = b.step("run", "Run the app");
-    run_step.dependOn(&run_cmd.step);
+    // const run_step = b.step("run", "Run the app");
+    // run_step.dependOn(&run_cmd.step);
 }

@@ -1,0 +1,8 @@
+# this should be hidden behind an import like `const {setGravity} = import("clashproto")`
+# but that does not work yet
+const setGravity = native("clashproto.setGravity")
+
+#default 1
+const input = native("std.input")
+const new_gravity = input("give new gravity: ") as int
+setGravity(new_gravity)
