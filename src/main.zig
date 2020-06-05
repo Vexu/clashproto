@@ -238,7 +238,7 @@ const Block = struct {
 
 const Game = struct {
     player: Player,
-    all_blocks: []Block,
+    all_blocks: []const Block,
 
     fn init() Game {
         return .{
@@ -313,21 +313,9 @@ fn runBog(alloc: *std.mem.Allocator, vm: *bog.Vm) !void {
     const source = try std.fs.cwd().readFileAlloc(alloc, "src/control.bog", 1024 * 1024);
     defer alloc.free(source);
 
-    var module = bog.compile(alloc, source, &vm.errors) catch |e| switch (e) {
-        error.TokenizeError, error.ParseError, error.CompileError => {
-            const stream = &std.io.getStdErr().outStream().stream;
-            return vm.errors.render(source, stream);
-        },
-        else => |err| return err,
-    };
-    defer module.deinit(alloc);
-
-    // TODO this should happen in vm.exec but currently that would break repl
-    vm.ip = module.entry;
-    _ = vm.exec(module) catch |e| switch (e) {
-        error.RuntimeError => {
-            const stream = &std.io.getStdErr().outStream().stream;
-            return vm.errors.render(source, stream);
+    _ = vm.run(source) catch |e| switch (e) {
+        error.RuntimeError, error.TokenizeError, error.ParseError, error.CompileError => {
+            return vm.errors.render(source, std.io.getStdErr().outStream());
         },
         else => |err| return err,
     };
@@ -373,7 +361,7 @@ pub fn main() anyerror!void {
     var errors = bog.Errors.init(alloc);
     defer errors.deinit();
 
-    var vm = try bog.Vm.init(alloc, .{});
+    var vm = bog.Vm.init(alloc, .{});
     defer vm.deinit();
     try bog.std.registerAll(&vm.native_registry);
     try vm.native_registry.register("clashproto.setGravity", setGravity);
